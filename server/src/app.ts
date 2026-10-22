@@ -9,15 +9,19 @@ import type {
   NextFunction,
 } from "express";
 
+import mongoose from "mongoose";
+
 import authRoutes from "./routes/authRoutes";
+import productRoutes from "./routes/productRoutes";
 
 const app = express();
 
-// Security headers
-app.use(helmet());
+// =====================================
+// SECURITY MIDDLEWARE
+// =====================================
 
-// Do not trust arbitrary proxy headers by default.
-// Configure trusted proxies when deploying.
+// Set security-related HTTP headers.
+app.use(helmet());
 
 // Allow our known frontend origin.
 const clientUrl =
@@ -30,16 +34,17 @@ app.use(
   })
 );
 
-// Limit incoming JSON data.
+// Limit JSON request size.
 app.use(express.json({ limit: "10kb" }));
 
-// Parse HttpOnly cookies from incoming requests.
+// Read authentication cookies.
 app.use(cookieParser());
 
-// Basic browser-origin protection for write requests.
-// This complements SameSite cookies.
+// Basic Origin and Fetch Metadata protection
+// for requests that can change server data.
 app.use("/api", (req, res, next) => {
   const safeMethods = ["GET", "HEAD", "OPTIONS"];
+
   if (safeMethods.includes(req.method)) {
     next();
     return;
@@ -61,7 +66,10 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-// Existing health endpoint
+// =====================================
+// HEALTH CHECK
+// =====================================
+
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     status: "success",
@@ -69,25 +77,38 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// Authentication API
+// =====================================
+// API ROUTES
+// =====================================
+
+// Day 2 authentication routes.
 app.use("/api/v1/auth", authRoutes);
 
-// Unknown API route
+// Day 3 product routes.
+app.use("/api/v1/products", productRoutes);
+
+// =====================================
+// UNKNOWN API ROUTES
+// =====================================
+
 app.use("/api", (_req, res) => {
   res.status(404).json({
     message: "API endpoint not found",
   });
 });
 
-// Centralized error handler
+// =====================================
+// CENTRALIZED ERROR HANDLER
+// =====================================
+
 app.use(
   (
     error: unknown,
     _req: Request,
     res: Response,
     _next: NextFunction
-  ) => {
-    // Duplicate email / unique index conflict
+  ): void => {
+    // Handle MongoDB duplicate-key errors.
     if (
       typeof error === "object" &&
       error !== null &&
@@ -95,11 +116,30 @@ app.use(
       error.code === 11000
     ) {
       res.status(409).json({
-        message: "An account with this email already exists",
+        message: "A value that must be unique already exists",
       });
       return;
     }
+
+    // Handle Mongoose validation errors.
+    if (error instanceof mongoose.Error.ValidationError) {
+      res.status(400).json({
+        message: "Invalid database field values",
+      });
+      return;
+    }
+
+    // Handle invalid MongoDB identifiers.
+    if (error instanceof mongoose.Error.CastError) {
+      res.status(400).json({
+        message: "Invalid resource identifier",
+      });
+      return;
+    }
+
+    // Log details on the server, not in the response.
     console.error("API error:", error);
+
     res.status(500).json({
       message: "Internal server error",
     });
