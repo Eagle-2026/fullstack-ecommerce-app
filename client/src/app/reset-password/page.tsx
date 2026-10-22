@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 
 import { apiFetch } from "@/lib/api";
@@ -11,41 +10,41 @@ type MessageResponse = {
 };
 
 export default function ResetPasswordPage() {
-  const [token, setToken] = useState<string | null>(null);
+  // Store the reset token without triggering a re-render.
+  const tokenRef = useRef("");
+
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Token is carried in the URL fragment.
-    const params = new URLSearchParams(
-      window.location.hash.substring(1)
-    );
+    // Read the reset token from the URL fragment.
+    const params = new URLSearchParams(window.location.hash.substring(1));
 
     const value = params.get("token");
 
     if (value) {
-      setToken(value);
+      // Store the token without calling setState.
+      tokenRef.current = value;
 
-      // Remove the secret from the visible URL.
+      // Remove the token from the visible URL.
+      // Preserve Next.js browser history state.
       window.history.replaceState(
-        null,
+        window.history.state,
         "",
-        "/reset-password"
+        window.location.pathname + window.location.search,
       );
-    } else {
-      setToken((previous) => previous ?? "");
     }
   }, []);
 
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setMessage("");
     setError("");
+
+    const token = tokenRef.current;
 
     if (!token) {
       setError("Missing reset token. Request a new link.");
@@ -55,25 +54,22 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const response = await apiFetch<MessageResponse>(
-        "/auth/reset-password",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            token,
-            password,
-          }),
-        }
-      );
+      const response = await apiFetch<MessageResponse>("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({
+          token,
+          password,
+        }),
+      });
 
       setMessage(response.message);
-      setToken("");
+
+      // Clear the token after successful use.
+      tokenRef.current = "";
       setPassword("");
     } catch (error) {
       setError(
-        error instanceof Error
-          ? error.message
-          : "Password reset failed"
+        error instanceof Error ? error.message : "Password reset failed",
       );
     } finally {
       setLoading(false);
@@ -86,19 +82,14 @@ export default function ResetPasswordPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow"
       >
-        <h1 className="text-3xl font-bold text-gray-900">
-          Reset Password
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900">Reset Password</h1>
 
         <p className="text-sm text-gray-600">
           Enter a new password for your account.
         </p>
 
         <div>
-          <label
-            htmlFor="password"
-            className="text-sm text-gray-700"
-          >
+          <label htmlFor="password" className="text-sm text-gray-700">
             New Password
           </label>
 
@@ -128,7 +119,7 @@ export default function ResetPasswordPage() {
 
         <button
           type="submit"
-          disabled={loading || token === null}
+          disabled={loading || Boolean(message)}
           className="w-full rounded-lg bg-gray-900 p-3 text-white disabled:opacity-50"
         >
           {loading ? "Updating..." : "Reset Password"}
