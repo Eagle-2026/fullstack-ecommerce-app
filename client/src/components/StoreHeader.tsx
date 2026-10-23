@@ -1,6 +1,12 @@
+"use client";
+
 import Link from "next/link";
 
+import { useCart } from "@/context/CartContext";
+
 export default function StoreHeader() {
+  const { itemCount, isLoaded } = useCart();
+
   return (
     <header className="border-b border-gray-200 bg-white">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6">
@@ -17,6 +23,13 @@ export default function StoreHeader() {
         >
           <Link href="/" className="text-gray-700 hover:text-blue-600">
             Shop
+          </Link>
+
+          <Link
+            href="/cart"
+            className="rounded-lg bg-blue-50 px-3 py-2 font-semibold text-blue-700 hover:bg-blue-100"
+          >
+            Cart ({isLoaded ? itemCount : "..."})
           </Link>
 
           <Link href="/account" className="text-gray-700 hover:text-blue-600">

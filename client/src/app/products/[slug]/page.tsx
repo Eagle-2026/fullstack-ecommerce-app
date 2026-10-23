@@ -6,6 +6,8 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import ProductImage from "@/components/ProductImage";
+import AddToCartButton from "@/components/AddToCartButton";
+
 import { formatPrice } from "@/lib/format";
 import { getProductBySlug } from "@/lib/products";
 
@@ -22,7 +24,7 @@ export default function ProductDetailPage() {
     enabled: Boolean(slug),
   });
 
-  // Initial loading
+  // Loading state.
   if (isPending) {
     return (
       <main className="mx-auto max-w-6xl px-4 py-12">
@@ -33,7 +35,7 @@ export default function ProductDetailPage() {
     );
   }
 
-  // API error
+  // API error.
   if (isError) {
     return (
       <main className="mx-auto max-w-6xl px-4 py-12">
@@ -42,7 +44,7 @@ export default function ProductDetailPage() {
           className="rounded-xl border border-red-200 bg-red-50 p-8"
         >
           <h1 className="text-2xl font-bold text-red-700">
-            Unable to load product
+            Unable to Load Product
           </h1>
 
           <p className="mt-3 text-red-600">
@@ -77,7 +79,7 @@ export default function ProductDetailPage() {
   if (!product) {
     return (
       <main className="mx-auto max-w-6xl px-4 py-12">
-        <h1 className="text-2xl font-bold">Product not found</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Product Not Found</h1>
 
         <Link
           href="/"
@@ -142,19 +144,23 @@ export default function ProductDetailPage() {
             </p>
           </div>
 
-          <div className="mt-8 rounded-xl border border-blue-100 bg-blue-50 p-5">
-            <p className="text-sm text-blue-900">
-              Shopping cart functionality will be added on Day 5. Today you can
-              browse products and view their details.
-            </p>
-          </div>
+          <div className="mt-8 max-w-sm space-y-4">
+            <AddToCartButton product={product} />
 
-          <Link
-            href="/"
-            className="mt-6 inline-flex rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
-          >
-            Continue Shopping
-          </Link>
+            <Link
+              href="/cart"
+              className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-6 py-3 font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              View Shopping Cart
+            </Link>
+
+            <Link
+              href="/"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+            >
+              Continue Shopping
+            </Link>
+          </div>
         </section>
       </div>
     </main>

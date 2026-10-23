@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import ProductImage from "@/components/ProductImage";
+import AddToCartButton from "@/components/AddToCartButton";
+
 import { formatPrice } from "@/lib/format";
 
 import type { Product } from "@/types/product";
@@ -47,12 +49,16 @@ export default function ProductCard({ product }: ProductCardProps) {
           <p className="text-sm font-medium text-red-600">Out of stock</p>
         )}
 
-        <Link
-          href={`/products/${encodeURIComponent(product.slug)}`}
-          className="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
-        >
-          View Details
-        </Link>
+        <div className="space-y-3 pt-2">
+          <AddToCartButton product={product} />
+
+          <Link
+            href={`/products/${encodeURIComponent(product.slug)}`}
+            className="inline-flex w-full items-center justify-center rounded-lg border border-blue-600 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+          >
+            View Details
+          </Link>
+        </div>
       </div>
     </article>
   );
