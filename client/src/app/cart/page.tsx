@@ -10,6 +10,7 @@ import ProductImage from "@/components/ProductImage";
 
 import { formatPrice } from "@/lib/format";
 import { getProductBySlug } from "@/lib/products";
+import CheckoutButton from "@/components/CheckoutButton";
 
 export default function CartPage() {
   const { items, isLoaded, itemCount, updateQuantity, removeItem, clearCart } =
@@ -335,13 +336,21 @@ export default function CartPage() {
             API. Shipping and taxes are not included.
           </p>
 
-          <button
-            type="button"
-            disabled
-            className="mt-6 w-full cursor-not-allowed rounded-lg bg-gray-400 px-6 py-3 font-semibold text-white"
-          >
-            Checkout — Available on Day 6
-          </button>
+          <div className="mt-6">
+            {canCalculateSubtotal && !hasStockProblem ? (
+              <CheckoutButton />
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="w-full cursor-not-allowed rounded-lg bg-gray-400 px-6 py-3 font-semibold text-white"
+              >
+                {hasStockProblem
+                  ? "Fix stock issues before checkout"
+                  : "Checking products..."}
+              </button>
+            )}
+          </div>
 
           <Link
             href="/"

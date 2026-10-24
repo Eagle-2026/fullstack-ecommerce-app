@@ -25,6 +25,11 @@ export default function StoreHeader() {
             Shop
           </Link>
 
+          {/* Day 6: Customer order history */}
+          <Link href="/orders" className="text-gray-700 hover:text-blue-600">
+            My Orders
+          </Link>
+
           <Link
             href="/cart"
             className="rounded-lg bg-blue-50 px-3 py-2 font-semibold text-blue-700 hover:bg-blue-100"

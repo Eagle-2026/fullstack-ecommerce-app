@@ -2,17 +2,15 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-
-import type {
-  Request,
-  Response,
-  NextFunction,
-} from "express";
-
 import mongoose from "mongoose";
+
+import type { Request, Response, NextFunction } from "express";
 
 import authRoutes from "./routes/authRoutes";
 import productRoutes from "./routes/productRoutes";
+import orderRoutes from "./routes/orderRoutes";
+
+import { stripeWebhook } from "./controllers/stripeWebhookController";
 
 const app = express();
 
@@ -20,28 +18,45 @@ const app = express();
 // SECURITY MIDDLEWARE
 // =====================================
 
-// Set security-related HTTP headers.
 app.use(helmet());
 
-// Allow our known frontend origin.
-const clientUrl =
-  process.env.CLIENT_URL || "http://localhost:3000";
+const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
 
 app.use(
   cors({
     origin: clientUrl,
     credentials: true,
-  })
+  }),
 );
 
-// Limit JSON request size.
-app.use(express.json({ limit: "10kb" }));
+// =====================================
+// STRIPE WEBHOOK
+// IMPORTANT: MUST RUN BEFORE express.json()
+// =====================================
 
-// Read authentication cookies.
+app.post(
+  "/api/v1/stripe/webhook",
+  express.raw({
+    type: "application/json",
+    limit: "100kb",
+  }),
+  stripeWebhook,
+);
+
+// =====================================
+// NORMAL APPLICATION MIDDLEWARE
+// =====================================
+
+app.use(
+  express.json({
+    limit: "10kb",
+  }),
+);
+
 app.use(cookieParser());
 
-// Basic Origin and Fetch Metadata protection
-// for requests that can change server data.
+// Basic Origin and Fetch Metadata checks
+// for requests that modify application data.
 app.use("/api", (req, res, next) => {
   const safeMethods = ["GET", "HEAD", "OPTIONS"];
 
@@ -53,10 +68,7 @@ app.use("/api", (req, res, next) => {
   const origin = req.get("origin");
   const fetchSite = req.get("sec-fetch-site");
 
-  if (
-    (origin && origin !== clientUrl) ||
-    fetchSite === "cross-site"
-  ) {
+  if ((origin && origin !== clientUrl) || fetchSite === "cross-site") {
     res.status(403).json({
       message: "Request origin is not allowed",
     });
@@ -78,14 +90,22 @@ app.get("/api/health", (_req, res) => {
 });
 
 // =====================================
-// API ROUTES
+// AUTHENTICATION ROUTES — DAY 2
 // =====================================
 
-// Day 2 authentication routes.
 app.use("/api/v1/auth", authRoutes);
 
-// Day 3 product routes.
+// =====================================
+// PRODUCT ROUTES — DAY 3
+// =====================================
+
 app.use("/api/v1/products", productRoutes);
+
+// =====================================
+// ORDER ROUTES — DAY 6
+// =====================================
+
+app.use("/api/v1/orders", orderRoutes);
 
 // =====================================
 // UNKNOWN API ROUTES
@@ -102,13 +122,7 @@ app.use("/api", (_req, res) => {
 // =====================================
 
 app.use(
-  (
-    error: unknown,
-    _req: Request,
-    res: Response,
-    _next: NextFunction
-  ): void => {
-    // Handle MongoDB duplicate-key errors.
+  (error: unknown, _req: Request, res: Response, _next: NextFunction): void => {
     if (
       typeof error === "object" &&
       error !== null &&
@@ -121,7 +135,6 @@ app.use(
       return;
     }
 
-    // Handle Mongoose validation errors.
     if (error instanceof mongoose.Error.ValidationError) {
       res.status(400).json({
         message: "Invalid database field values",
@@ -129,7 +142,6 @@ app.use(
       return;
     }
 
-    // Handle invalid MongoDB identifiers.
     if (error instanceof mongoose.Error.CastError) {
       res.status(400).json({
         message: "Invalid resource identifier",
@@ -137,13 +149,12 @@ app.use(
       return;
     }
 
-    // Log details on the server, not in the response.
     console.error("API error:", error);
 
     res.status(500).json({
       message: "Internal server error",
     });
-  }
+  },
 );
 
 export default app;
