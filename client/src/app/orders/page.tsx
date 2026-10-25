@@ -2,87 +2,108 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-
 import { getMyOrders } from "@/lib/orders";
-import { formatPrice } from "@/lib/format";
+
+function formatMoney(cents: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(cents / 100);
+}
 
 export default function OrdersPage() {
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isPending, isError } = useQuery({
     queryKey: ["my-orders"],
     queryFn: getMyOrders,
+    staleTime: 10000,
+    retry: false,
   });
 
-  const orders = data?.data.orders ?? [];
+  if (isPending) {
+    return (
+      <main className="mx-auto max-w-5xl p-6">
+        <h1 className="text-3xl font-bold">My Orders</h1>
+
+        <p className="mt-4">Loading your orders...</p>
+      </main>
+    );
+  }
+
+  if (isError) {
+    return (
+      <main className="mx-auto max-w-5xl p-6">
+        <h1 className="text-3xl font-bold">My Orders</h1>
+
+        <p className="mt-4 text-red-600">
+          Unable to load orders. Please check that you are signed in.
+        </p>
+      </main>
+    );
+  }
+
+  const orders = data.data.orders;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
-      <h1 className="text-3xl font-bold text-gray-900">My Orders</h1>
+    <main className="mx-auto max-w-5xl p-6">
+      <h1 className="text-3xl font-bold">My Orders</h1>
 
-      <p className="mt-2 text-gray-600">Your 20 most recent orders.</p>
+      <p className="mt-2 text-gray-600">
+        View your previous purchases and payment statuses.
+      </p>
 
-      {isLoading && <p className="mt-6">Loading orders...</p>}
+      {orders.length === 0 ? (
+        <div className="mt-8 rounded-xl border p-6">
+          <p>You have not placed any orders yet.</p>
 
-      {isError && (
-        <p className="mt-6 text-red-600">
-          {error instanceof Error ? error.message : "Unable to load orders"}
-        </p>
-      )}
-
-      {!isLoading && !isError && orders.length === 0 && (
-        <div className="mt-8 rounded-lg border p-6">
-          <p>You have no orders yet.</p>
-
-          <Link href="/" className="mt-4 inline-block text-blue-600 underline">
-            Start Shopping
+          <Link href="/products" className="mt-4 inline-block text-blue-600">
+            Browse Products
           </Link>
         </div>
-      )}
+      ) : (
+        <div className="mt-8 space-y-4">
+          {orders.map((order) => (
+            <article
+              key={order._id}
+              className="rounded-xl border bg-white p-5 shadow-sm"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-semibold">Order</h2>
 
-      <div className="mt-8 space-y-5">
-        {orders.map((order) => (
-          <div
-            key={order._id}
-            className="rounded-xl border bg-white p-6 shadow-sm"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h2 className="font-semibold text-gray-900">
-                  Order #{order._id.slice(-8)}
-                </h2>
+                  <p className="mt-1 break-all text-sm text-gray-600">
+                    {order._id}
+                  </p>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  {new Date(order.createdAt).toLocaleDateString("en-US")}
-                </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    {new Date(order.createdAt).toISOString().slice(0, 10)}
+                  </p>
+
+                  <p className="mt-2 text-sm">
+                    {order.items.length} product line(s)
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-lg font-bold">
+                    {formatMoney(order.totalCents, order.currency)}
+                  </p>
+
+                  <p className="mt-2 text-sm capitalize">
+                    Status: {order.status}
+                  </p>
+                </div>
               </div>
 
-              <span className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900">
-                {order.status.toUpperCase()}
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              {order.items.map((item) => (
-                <p key={item.slug} className="text-sm text-gray-700">
-                  {item.name} x {item.quantity}
-                </p>
-              ))}
-            </div>
-
-            <div className="mt-5 flex items-center justify-between border-t pt-4">
-              <p className="font-bold text-gray-900">
-                {formatPrice(order.totalCents)}
-              </p>
-
               <Link
-                href={`/checkout/success?orderId=${order._id}`}
-                className="text-blue-600 underline"
+                href={`/orders/${order._id}`}
+                className="mt-5 inline-block rounded-lg bg-black px-4 py-2 text-sm font-medium text-white"
               >
-                View Status
+                View Order Details
               </Link>
-            </div>
-          </div>
-        ))}
-      </div>
+            </article>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
