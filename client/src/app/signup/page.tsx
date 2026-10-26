@@ -1,14 +1,16 @@
-
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
+import type { AuthUser } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,15 +19,20 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+
     setError("");
     setLoading(true);
 
     try {
-      await apiFetch("/auth/signup", {
+      // Step 1: Send registration details to the backend.
+      const response = await apiFetch<{
+        status: string;
+        data: {
+          user: AuthUser;
+        };
+      }>("/auth/signup", {
         method: "POST",
         body: JSON.stringify({
           name,
@@ -34,13 +41,17 @@ export default function SignupPage() {
         }),
       });
 
+      // Step 2: Clear cached data from any previous user.
+      queryClient.clear();
+
+      // Step 3: Save the newly registered user
+      // in the shared React Query cache.
+      queryClient.setQueryData(["me"], response.data.user);
+
+      // Step 4: Redirect to the account page.
       router.replace("/account");
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Registration failed"
-      );
+      setError(error instanceof Error ? error.message : "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -52,14 +63,13 @@ export default function SignupPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow"
       >
-        <h1 className="text-3xl font-bold text-gray-900">
-          Create Account
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900">Create Account</h1>
 
         <div>
           <label htmlFor="name" className="text-sm text-gray-700">
             Full Name
           </label>
+
           <input
             id="name"
             type="text"
@@ -77,6 +87,7 @@ export default function SignupPage() {
           <label htmlFor="email" className="text-sm text-gray-700">
             Email
           </label>
+
           <input
             id="email"
             type="email"
@@ -92,6 +103,7 @@ export default function SignupPage() {
           <label htmlFor="password" className="text-sm text-gray-700">
             Password
           </label>
+
           <input
             id="password"
             type="password"
@@ -102,9 +114,8 @@ export default function SignupPage() {
             onChange={(event) => setPassword(event.target.value)}
             className="mt-1 w-full rounded-lg border p-3 text-gray-900"
           />
-          <p className="mt-1 text-xs text-gray-500">
-            At least 12 characters.
-          </p>
+
+          <p className="mt-1 text-xs text-gray-500">At least 12 characters.</p>
         </div>
 
         {error && (

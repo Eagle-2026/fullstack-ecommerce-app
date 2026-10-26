@@ -9,6 +9,7 @@ import type { Request, Response, NextFunction } from "express";
 import authRoutes from "./routes/authRoutes";
 import productRoutes from "./routes/productRoutes";
 import orderRoutes from "./routes/orderRoutes";
+import adminRoutes from "./routes/adminRoutes";
 
 import { stripeWebhook } from "./controllers/stripeWebhookController";
 
@@ -106,7 +107,7 @@ app.use("/api/v1/products", productRoutes);
 // =====================================
 
 app.use("/api/v1/orders", orderRoutes);
-
+app.use("/api/v1/admin", adminRoutes);
 // =====================================
 // UNKNOWN API ROUTES
 // =====================================

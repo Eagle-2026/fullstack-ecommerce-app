@@ -1,14 +1,16 @@
-
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
+import type { AuthUser } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,15 +18,20 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+
     setError("");
     setLoading(true);
 
     try {
-      await apiFetch("/auth/login", {
+      // Step 1: Send login details to the backend.
+      const response = await apiFetch<{
+        status: string;
+        data: {
+          user: AuthUser;
+        };
+      }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({
           email,
@@ -32,13 +39,17 @@ export default function LoginPage() {
         }),
       });
 
+      // Step 2: Clear cached data from any previous user.
+      queryClient.clear();
+
+      // Step 3: Update the shared authentication state.
+      // The StoreHeader will now recognize the logged-in user.
+      queryClient.setQueryData(["me"], response.data.user);
+
+      // Step 4: Redirect to the account page.
       router.replace("/account");
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Login failed"
-      );
+      setError(error instanceof Error ? error.message : "Login failed");
     } finally {
       setLoading(false);
     }
@@ -50,14 +61,13 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow"
       >
-        <h1 className="text-3xl font-bold text-gray-900">
-          Customer Login
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900">Customer Login</h1>
 
         <div>
           <label htmlFor="email" className="text-sm text-gray-700">
             Email
           </label>
+
           <input
             id="email"
             type="email"
@@ -73,6 +83,7 @@ export default function LoginPage() {
           <label htmlFor="password" className="text-sm text-gray-700">
             Password
           </label>
+
           <input
             id="password"
             type="password"
