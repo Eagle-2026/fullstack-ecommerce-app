@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
+import { verifyRequestOrigin } from "./middleware/verifyRequestOrigin";
 
 import type { Request, Response, NextFunction } from "express";
 
@@ -56,29 +57,31 @@ app.use(
 
 app.use(cookieParser());
 
-// Basic Origin and Fetch Metadata checks
-// for requests that modify application data.
-app.use("/api", (req, res, next) => {
-  const safeMethods = ["GET", "HEAD", "OPTIONS"];
+// // Basic Origin and Fetch Metadata checks for requests that modify application data.
+// app.use("/api", (req, res, next) => {
+//   const safeMethods = ["GET", "HEAD", "OPTIONS"];
 
-  if (safeMethods.includes(req.method)) {
-    next();
-    return;
-  }
+//   if (safeMethods.includes(req.method)) {
+//     next();
+//     return;
+//   }
 
-  const origin = req.get("origin");
-  const fetchSite = req.get("sec-fetch-site");
+//   const origin = req.get("origin");
+//   const fetchSite = req.get("sec-fetch-site");
 
-  if ((origin && origin !== clientUrl) || fetchSite === "cross-site") {
-    res.status(403).json({
-      message: "Request origin is not allowed",
-    });
-    return;
-  }
+//   if ((origin && origin !== clientUrl) || fetchSite === "cross-site") {
+//     res.status(403).json({
+//       message: "Request origin is not allowed",
+//     });
+//     return;
+//   }
 
-  next();
-});
+//   next();
+// });
 
+
+// Protect against untrusted request origins
+app.use("/api", verifyRequestOrigin);
 // =====================================
 // HEALTH CHECK
 // =====================================
