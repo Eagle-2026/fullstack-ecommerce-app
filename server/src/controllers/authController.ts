@@ -8,13 +8,14 @@ import Session from "../models/Session";
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
-  REFRESH_MS,
+  SESSION_MS,
   createAccessToken,
   newRefreshToken,
   hashToken,
   verifyAccessToken,
   setAuthCookies,
   clearAuthCookies,
+  getSessionDeadline,
 } from "../utils/authTokens";
 
 import { sendResetEmail } from "../services/resetEmail";
@@ -27,7 +28,9 @@ const safeUser = (user: IUser) => ({
   role: user.role,
 });
 
-// Create a new login session.
+// =====================================
+// CREATE LOGIN SESSION
+// =====================================
 const startSession = async (
   user: IUser,
   res: Response,
@@ -35,20 +38,26 @@ const startSession = async (
 ): Promise<void> => {
   const refreshToken = newRefreshToken();
 
+  // Original login time determines expiration.
+  const expiresAt = new Date(Date.now() + SESSION_MS);
+
   const session = await Session.create({
     user: user._id,
     refreshTokenHash: hashToken(refreshToken),
-    expiresAt: new Date(Date.now() + REFRESH_MS),
+    expiresAt,
     revoked: false,
   });
+
+  const deadline = getSessionDeadline(session);
 
   const accessToken = createAccessToken(
     user._id.toString(),
     session._id.toString(),
     user.authVersion,
+    deadline,
   );
 
-  setAuthCookies(res, accessToken, refreshToken);
+  setAuthCookies(res, accessToken, refreshToken, deadline);
 
   res.status(statusCode).json({
     status: "success",
@@ -63,19 +72,24 @@ const startSession = async (
 // =====================================
 export const register = async (req: Request, res: Response): Promise<void> => {
   const { name, email, password } = req.body;
+
   const existingUser = await User.findOne({ email });
+
   if (existingUser) {
     res.status(409).json({
       message: "An account with this email already exists",
     });
     return;
   }
-  // The User model hashes the password.
+
+  // Password hashing is handled by User model.
+  // Never accept an admin role from registration.
   const user = await User.create({
     name,
     email,
     password,
   });
+
   await startSession(user, res, 201);
 };
 
@@ -134,22 +148,30 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
   }
 
   const newToken = newRefreshToken();
+  const now = new Date();
 
-  // Atomic update: the old refresh token can
-  // only be exchanged successfully once.
+  // Atomically rotate the refresh token.
+  //
+  // IMPORTANT:
+  // Do not extend expiresAt.
+  // Reject sessions created over 1 hour ago.
   const session = await Session.findOneAndUpdate(
     {
       refreshTokenHash: hashToken(oldToken),
       revoked: false,
-      expiresAt: { $gt: new Date() },
+      expiresAt: { $gt: now },
+      createdAt: {
+        $gt: new Date(now.getTime() - SESSION_MS),
+      },
     },
     {
       $set: {
         refreshTokenHash: hashToken(newToken),
-        expiresAt: new Date(Date.now() + REFRESH_MS),
       },
     },
-    { new: true },
+    {
+      returnDocument: "after",
+    },
   );
 
   if (!session) {
@@ -161,13 +183,27 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
+  const deadline = getSessionDeadline(session);
+
+  // Double-check the absolute expiration.
+  if (deadline.getTime() - Date.now() < 1000) {
+    await Session.updateOne({ _id: session._id }, { $set: { revoked: true } });
+
+    clearAuthCookies(res);
+
+    res.status(401).json({
+      message: "Login session has expired",
+    });
+    return;
+  }
+
   const user = await User.findById(session.user);
 
   if (!user) {
-    await Session.findByIdAndUpdate(session._id, {
-      revoked: true,
-    });
+    await Session.updateOne({ _id: session._id }, { $set: { revoked: true } });
+
     clearAuthCookies(res);
+
     res.status(401).json({
       message: "Customer no longer exists",
     });
@@ -178,9 +214,10 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     user._id.toString(),
     session._id.toString(),
     user.authVersion,
+    deadline,
   );
 
-  setAuthCookies(res, accessToken, newToken);
+  setAuthCookies(res, accessToken, newToken, deadline);
 
   res.status(200).json({
     status: "success",
@@ -191,33 +228,35 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 // =====================================
 // LOGOUT
 // =====================================
+
 export const logout = async (req: Request, res: Response): Promise<void> => {
   const refreshToken = req.cookies?.[REFRESH_COOKIE];
   const accessToken = req.cookies?.[ACCESS_COOKIE];
 
-  // Revoke using the refresh token when present.
-  if (typeof refreshToken === "string") {
-    await Session.updateOne(
-      { refreshTokenHash: hashToken(refreshToken) },
-      { $set: { revoked: true } },
-    );
-  }
-
-  // Also revoke through a valid signed access token,
-  // including an expired one from the same session.
-  if (typeof accessToken === "string") {
-    try {
-      const payload = verifyAccessToken(accessToken, true);
-
-      await Session.findByIdAndUpdate(payload.sessionId, {
-        revoked: true,
-      });
-    } catch {
-      // An invalid access token does not stop logout.
+  try {
+    if (typeof refreshToken === "string") {
+      await Session.updateOne(
+        { refreshTokenHash: hashToken(refreshToken) },
+        { $set: { revoked: true } },
+      );
     }
-  }
 
-  clearAuthCookies(res);
+    let sessionId: string | null = null;
+
+    if (typeof accessToken === "string") {
+      try {
+        sessionId = verifyAccessToken(accessToken, true).sessionId;
+      } catch {
+        // Ignore invalid access tokens.
+      }
+    }
+
+    if (sessionId) {
+      await Session.updateOne({ _id: sessionId }, { $set: { revoked: true } });
+    }
+  } finally {
+    clearAuthCookies(res);
+  }
 
   res.status(200).json({
     status: "success",
@@ -241,19 +280,20 @@ export const forgotPassword = async (
 
   if (user) {
     const rawToken = crypto.randomBytes(32).toString("hex");
+
     user.resetTokenHash = hashToken(rawToken);
+
     user.resetTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await user.save();
 
     const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
 
-    // Fragment tokens are not sent in HTTP requests.
     const resetUrl = `${clientUrl}/reset-password#token=${rawToken}`;
+
     await sendResetEmail(user.email, resetUrl);
   }
 
-  // Same response whether the email exists or not.
   res.status(200).json({
     status: "success",
     message: genericMessage,
@@ -271,15 +311,17 @@ export const resetPassword = async (
 
   const tokenHash = hashToken(token);
 
-  // Hash manually because findOneAndUpdate does
-  // not run our pre("save") password hook.
+  // findOneAndUpdate does not run the
+  // User model's pre-save password hook.
   const passwordHash = await bcrypt.hash(password, 12);
 
-  // Atomically consume the reset token.
+  // Consume the reset token exactly once.
   const user = await User.findOneAndUpdate(
     {
       resetTokenHash: tokenHash,
-      resetTokenExpiresAt: { $gt: new Date() },
+      resetTokenExpiresAt: {
+        $gt: new Date(),
+      },
     },
     {
       $set: {
@@ -293,7 +335,9 @@ export const resetPassword = async (
         authVersion: 1,
       },
     },
-    { new: true },
+    {
+      returnDocument: "after",
+    },
   );
 
   if (!user) {
@@ -303,7 +347,7 @@ export const resetPassword = async (
     return;
   }
 
-  // Revoke every old login after password reset.
+  // Revoke all existing customer sessions.
   await Session.updateMany({ user: user._id }, { $set: { revoked: true } });
 
   clearAuthCookies(res);

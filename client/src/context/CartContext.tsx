@@ -2,25 +2,44 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
   type ReactNode,
 } from "react";
 
-// The browser key where our shopping cart is saved.
+// =====================================
+// CART SETTINGS
+// =====================================
+
+// Store only product slugs and quantities.
+// Never store passwords, JWTs, or payment data.
 const CART_STORAGE_KEY = "ecommerce-cart-v1";
 
-// Limit each product to 20 units in the demo cart.
+// Maximum quantity for one product.
 export const MAX_CART_QUANTITY = 20;
 
-// One item inside the shopping cart.
+// Maximum different products in one cart.
+export const MAX_CART_ITEMS = 50;
+
+// Limit the size of saved browser data.
+const MAX_STORAGE_LENGTH = 50000;
+
+// Match safe product slugs.
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const MAX_SLUG_LENGTH = 120;
+
+// =====================================
+// CART TYPES
+// =====================================
+
 export type CartItem = {
   slug: string;
   quantity: number;
 };
 
-// Information and functions shared with our components.
 type CartContextType = {
   items: CartItem[];
   isLoaded: boolean;
@@ -34,17 +53,32 @@ type CartContextType = {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// Check saved browser data before using it.
+// =====================================
+// VALIDATE PRODUCT SLUG
+// =====================================
+
+function isValidSlug(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= MAX_SLUG_LENGTH &&
+    SLUG_PATTERN.test(value)
+  );
+}
+
+// =====================================
+// VALIDATE SAVED CART ITEM
+// =====================================
+
 function isValidCartItem(value: unknown): value is CartItem {
   if (typeof value !== "object" || value === null) {
     return false;
   }
 
-  const item = value as Partial<CartItem>;
+  const item = value as Record<string, unknown>;
 
   return (
-    typeof item.slug === "string" &&
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.slug) &&
+    isValidSlug(item.slug) &&
     typeof item.quantity === "number" &&
     Number.isSafeInteger(item.quantity) &&
     item.quantity >= 1 &&
@@ -52,15 +86,16 @@ function isValidCartItem(value: unknown): value is CartItem {
   );
 }
 
-// Read previously saved cart items.
-function loadSavedCart(): CartItem[] {
+// =====================================
+// PARSE SAVED CART SAFELY
+// =====================================
+
+function parseSavedCart(savedCart: string | null): CartItem[] {
+  if (!savedCart || savedCart.length > MAX_STORAGE_LENGTH) {
+    return [];
+  }
+
   try {
-    const savedCart = localStorage.getItem(CART_STORAGE_KEY);
-
-    if (!savedCart) {
-      return [];
-    }
-
     const parsed: unknown = JSON.parse(savedCart);
 
     if (!Array.isArray(parsed)) {
@@ -70,11 +105,23 @@ function loadSavedCart(): CartItem[] {
     const uniqueItems = new Map<string, CartItem>();
 
     for (const item of parsed) {
-      if (isValidCartItem(item) && !uniqueItems.has(item.slug)) {
-        uniqueItems.set(item.slug, {
-          slug: item.slug,
-          quantity: item.quantity,
-        });
+      if (!isValidCartItem(item)) {
+        continue;
+      }
+
+      // Avoid duplicate product entries.
+      if (uniqueItems.has(item.slug)) {
+        continue;
+      }
+
+      uniqueItems.set(item.slug, {
+        slug: item.slug,
+        quantity: item.quantity,
+      });
+
+      // Prevent an oversized cart.
+      if (uniqueItems.size >= MAX_CART_ITEMS) {
+        break;
       }
     }
 
@@ -84,6 +131,22 @@ function loadSavedCart(): CartItem[] {
   }
 }
 
+// =====================================
+// LOAD CART FROM BROWSER
+// =====================================
+
+function loadSavedCart(): CartItem[] {
+  try {
+    return parseSavedCart(localStorage.getItem(CART_STORAGE_KEY));
+  } catch {
+    return [];
+  }
+}
+
+// =====================================
+// CART PROVIDER
+// =====================================
+
 type CartProviderProps = {
   children: ReactNode;
 };
@@ -92,7 +155,10 @@ export function CartProvider({ children }: CartProviderProps) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Read localStorage only after the browser mounts.
+  // =====================================
+  // LOAD CART AFTER MOUNTING
+  // =====================================
+
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       setItems(loadSavedCart());
@@ -104,34 +170,52 @@ export function CartProvider({ children }: CartProviderProps) {
     };
   }, []);
 
-  // Save cart changes after initial loading.
+  // =====================================
+  // SAVE CART CHANGES
+  // =====================================
+
   useEffect(() => {
-    if (!isLoaded) {
-      return;
-    }
+    if (!isLoaded) return;
 
     try {
       localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
     } catch {
-      // The cart still works during this session
-      // even when browser storage is unavailable.
+      // Cart remains usable in React state.
     }
   }, [items, isLoaded]);
 
-  // Add one unit of a product.
+  // =====================================
+  // SYNC CART BETWEEN BROWSER TABS
+  // =====================================
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.storageArea !== window.localStorage) {
+        return;
+      }
+
+      if (event.key === CART_STORAGE_KEY || event.key === null) {
+        setItems(parseSavedCart(event.newValue));
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  // =====================================
+  // ADD PRODUCT TO CART
+  // =====================================
+
   function addItem(slug: string, stock: number) {
-    if (
-      !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ||
-      !Number.isSafeInteger(stock)
-    ) {
+    if (!isValidSlug(slug) || !Number.isSafeInteger(stock) || stock < 1) {
       return;
     }
 
     const maximum = Math.min(stock, MAX_CART_QUANTITY);
-
-    if (maximum < 1) {
-      return;
-    }
 
     setItems((currentItems) => {
       const existingItem = currentItems.find((item) => item.slug === slug);
@@ -147,6 +231,12 @@ export function CartProvider({ children }: CartProviderProps) {
         );
       }
 
+      // Reject additional different products
+      // when the cart reaches its limit.
+      if (currentItems.length >= MAX_CART_ITEMS) {
+        return currentItems;
+      }
+
       return [
         ...currentItems,
         {
@@ -157,9 +247,12 @@ export function CartProvider({ children }: CartProviderProps) {
     });
   }
 
-  // Change the quantity of an existing product.
+  // =====================================
+  // UPDATE PRODUCT QUANTITY
+  // =====================================
+
   function updateQuantity(slug: string, quantity: number) {
-    if (!Number.isSafeInteger(quantity)) {
+    if (!isValidSlug(slug) || !Number.isSafeInteger(quantity)) {
       return;
     }
 
@@ -180,19 +273,40 @@ export function CartProvider({ children }: CartProviderProps) {
     );
   }
 
-  // Remove one product completely.
+  // =====================================
+  // REMOVE ONE PRODUCT
+  // =====================================
+
   function removeItem(slug: string) {
+    if (!isValidSlug(slug)) {
+      return;
+    }
+
     setItems((currentItems) =>
       currentItems.filter((item) => item.slug !== slug),
     );
   }
 
-  // Remove every product from the cart.
-  function clearCart() {
-    setItems([]);
-  }
+  // =====================================
+  // CLEAR ENTIRE CART
+  // =====================================
 
-  // Calculate total number of units in the cart.
+  const clearCart = useCallback(() => {
+    // Clear React state.
+    setItems([]);
+
+    // Also remove the persisted browser copy.
+    try {
+      localStorage.removeItem(CART_STORAGE_KEY);
+    } catch {
+      // React state is still cleared.
+    }
+  }, []);
+
+  // =====================================
+  // TOTAL NUMBER OF ITEMS
+  // =====================================
+
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
 
   return (
@@ -212,7 +326,10 @@ export function CartProvider({ children }: CartProviderProps) {
   );
 }
 
-// Reusable hook for accessing the shopping cart.
+// =====================================
+// REUSABLE CART HOOK
+// =====================================
+
 export function useCart() {
   const context = useContext(CartContext);
 

@@ -6,6 +6,8 @@ export interface ISession {
   refreshTokenHash: string;
   expiresAt: Date;
   revoked: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const sessionSchema = new Schema<ISession>(
@@ -32,10 +34,13 @@ const sessionSchema = new Schema<ISession>(
       default: false,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
 // MongoDB eventually removes expired records.
+// Security checks must not depend on TTL deletion.
 sessionSchema.index(
   { expiresAt: 1 },
   { expireAfterSeconds: 0 }

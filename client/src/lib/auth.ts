@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiRequestError } from "@/lib/api";
 
 export type AuthUser = {
   id: string;
@@ -14,12 +14,22 @@ type CurrentUserResponse = {
   };
 };
 
+// ======================================
+// GET CURRENT LOGGED-IN CUSTOMER
+// ======================================
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     const response = await apiFetch<CurrentUserResponse>("/auth/me");
 
     return response.data.user;
-  } catch {
-    return null;
+  } catch (error) {
+    // 401 means authentication is unavailable
+    // or the login session has expired.
+    if (error instanceof ApiRequestError && error.status === 401) {
+      return null;
+    }
+
+    // Do not hide network errors or server failures.
+    throw error;
   }
 }

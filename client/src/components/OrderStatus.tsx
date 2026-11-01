@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
 import Link from "next/link";
 
-import { getMyOrderById } from "@/lib/orders";
+import {
+  getMyOrderById,
+  verifyMyOrderPayment,
+  finishCheckoutAttempt,
+} from "@/lib/orders";
+
+import { ApiRequestError } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { useCart } from "@/context/CartContext";
 
@@ -13,17 +21,35 @@ type Props = {
 };
 
 export default function OrderStatus({ orderId }: Props) {
-  const { clearCart, isLoaded } = useCart();
+  const { items, clearCart, isLoaded } = useCart();
 
-  const cartCleared = useRef(false);
+  const queryClient = useQueryClient();
+
+  // Prevent handling the same final order status twice.
+  const finalStatusHandled = useRef<string | null>(null);
+
+  // Prevent repeated verification POSTs
+  // for the same order during this mount.
+  const verificationRequestedFor = useRef<string | null>(null);
+
+  const [verificationWarning, setVerificationWarning] = useState("");
 
   const validOrderId = /^[a-fA-F0-9]{24}$/.test(orderId);
 
+  // =====================================
+  // GET ORDER FROM TRUSTED BACKEND
+  // =====================================
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["order", orderId],
+
     queryFn: () => getMyOrderById(orderId),
+
     enabled: validOrderId,
+
     retry: 1,
+
+    // Keep checking while payment is pending.
     refetchInterval: (query) => {
       const status = query.state.data?.data.order.status;
 
@@ -33,34 +59,125 @@ export default function OrderStatus({ orderId }: Props) {
 
   const order = data?.data.order;
 
-  // Clear cart only after our backend
-  // confirms that the order is paid.
+  // =====================================
+  // VERIFY PENDING PAYMENT WITH STRIPE
+  // =====================================
+
   useEffect(() => {
-    if (order?.status === "paid" && isLoaded && !cartCleared.current) {
-      cartCleared.current = true;
+    if (
+      !validOrderId ||
+      order?.status !== "pending" ||
+      verificationRequestedFor.current === orderId
+    ) {
+      return;
+    }
+
+    verificationRequestedFor.current = orderId;
+
+    // The backend checks Stripe directly.
+    // This is a fallback to the Stripe webhook.
+    void verifyMyOrderPayment(orderId)
+      .then(() => {
+        // Retrieve the latest order status.
+        void queryClient.invalidateQueries({
+          queryKey: ["order", orderId],
+        });
+      })
+      .catch((err: unknown) => {
+        // Never assume payment succeeded
+        // when verification fails.
+        if (err instanceof ApiRequestError && err.status === 409) {
+          setVerificationWarning(
+            "Payment details could not be verified. Please check your orders before trying again.",
+          );
+        }
+
+        // The regular GET polling can still
+        // receive updates from the webhook.
+      });
+  }, [validOrderId, orderId, order?.status, queryClient]);
+
+  // =====================================
+  // HANDLE CONFIRMED FINAL ORDER STATUS
+  // =====================================
+
+  useEffect(() => {
+    // Wait until the shopping cart has loaded.
+    if (!order || !isLoaded) {
+      return;
+    }
+
+    // Do not finish checkout while the order
+    // is still pending.
+    if (order.status === "pending") {
+      return;
+    }
+
+    // Handle paid, failed, or expired orders.
+    const finalStatusKey = `${order._id}:${order.status}`;
+
+    if (finalStatusHandled.current === finalStatusKey) {
+      return;
+    }
+
+    finalStatusHandled.current = finalStatusKey;
+
+    // The helper checks whether this order
+    // belongs to the saved checkout attempt.
+    //
+    // It also checks whether the current cart
+    // still matches the checkout cart.
+    const shouldClearCart = finishCheckoutAttempt(
+      order._id,
+      order.status,
+      items.map((item) => ({
+        slug: item.slug,
+        quantity: item.quantity,
+      })),
+    );
+
+    // Clear only after confirmed payment
+    // AND a matching checkout attempt.
+    if (shouldClearCart) {
       clearCart();
     }
-  }, [order?.status, isLoaded, clearCart]);
+  }, [order, isLoaded, items, clearCart]);
+
+  // =====================================
+  // INVALID ORDER ID
+  // =====================================
 
   if (!validOrderId) {
     return <p className="text-red-600">Invalid order ID.</p>;
   }
 
+  // =====================================
+  // LOADING
+  // =====================================
+
   if (isLoading) {
-    return <p>Checking payment status...</p>;
+    return <p role="status">Checking payment status...</p>;
   }
+
+  // =====================================
+  // ERROR
+  // =====================================
 
   if (isError) {
     return (
-      <p className="text-red-600">
+      <p role="alert" className="text-red-600">
         {error instanceof Error ? error.message : "Unable to load order"}
       </p>
     );
   }
 
   if (!order) {
-    return <p>Order not found.</p>;
+    return <p className="text-red-600">Order not found.</p>;
   }
+
+  // =====================================
+  // ORDER STATUS DISPLAY
+  // =====================================
 
   return (
     <div className="mx-auto max-w-2xl rounded-xl bg-white p-8 shadow">
@@ -71,6 +188,12 @@ export default function OrderStatus({ orderId }: Props) {
       <p className="mt-2 text-lg font-semibold text-gray-900">
         Total: {formatPrice(order.totalCents)}
       </p>
+
+      {verificationWarning && (
+        <p role="alert" className="mt-4 rounded-lg bg-red-50 p-4 text-red-700">
+          {verificationWarning}
+        </p>
+      )}
 
       {order.status === "paid" ? (
         <div className="mt-5 rounded-lg bg-green-50 p-4 text-green-800">

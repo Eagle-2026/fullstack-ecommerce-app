@@ -3,9 +3,13 @@ import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
-import { verifyRequestOrigin } from "./middleware/verifyRequestOrigin";
 
 import type { Request, Response, NextFunction } from "express";
+
+import { verifyRequestOrigin } from "./middleware/verifyRequestOrigin";
+import { requestLogger } from "./middleware/requestLogger";
+
+import { logger } from "./utils/logger";
 
 import authRoutes from "./routes/authRoutes";
 import productRoutes from "./routes/productRoutes";
@@ -15,6 +19,14 @@ import adminRoutes from "./routes/adminRoutes";
 import { stripeWebhook } from "./controllers/stripeWebhookController";
 
 const app = express();
+
+// =====================================
+// REQUEST LOGGING
+// =====================================
+
+// Must run early so it can observe
+// successful requests and failed requests.
+app.use(requestLogger);
 
 // =====================================
 // SECURITY MIDDLEWARE
@@ -28,14 +40,17 @@ app.use(
   cors({
     origin: clientUrl,
     credentials: true,
+    exposedHeaders: ["X-Request-ID"],
   }),
 );
 
 // =====================================
 // STRIPE WEBHOOK
-// IMPORTANT: MUST RUN BEFORE express.json()
+// MUST RUN BEFORE express.json()
 // =====================================
 
+// Keep the original raw body for
+// Stripe signature verification.
 app.post(
   "/api/v1/stripe/webhook",
   express.raw({
@@ -57,31 +72,10 @@ app.use(
 
 app.use(cookieParser());
 
-// // Basic Origin and Fetch Metadata checks for requests that modify application data.
-// app.use("/api", (req, res, next) => {
-//   const safeMethods = ["GET", "HEAD", "OPTIONS"];
-
-//   if (safeMethods.includes(req.method)) {
-//     next();
-//     return;
-//   }
-
-//   const origin = req.get("origin");
-//   const fetchSite = req.get("sec-fetch-site");
-
-//   if ((origin && origin !== clientUrl) || fetchSite === "cross-site") {
-//     res.status(403).json({
-//       message: "Request origin is not allowed",
-//     });
-//     return;
-//   }
-
-//   next();
-// });
-
-
-// Protect against untrusted request origins
+// Reject untrusted origins for requests
+// that modify application data.
 app.use("/api", verifyRequestOrigin);
+
 // =====================================
 // HEALTH CHECK
 // =====================================
@@ -94,23 +88,29 @@ app.get("/api/health", (_req, res) => {
 });
 
 // =====================================
-// AUTHENTICATION ROUTES — DAY 2
+// AUTHENTICATION ROUTES
 // =====================================
 
 app.use("/api/v1/auth", authRoutes);
 
 // =====================================
-// PRODUCT ROUTES — DAY 3
+// PRODUCT ROUTES
 // =====================================
 
 app.use("/api/v1/products", productRoutes);
 
 // =====================================
-// ORDER ROUTES — DAY 6
+// ORDER ROUTES
 // =====================================
 
 app.use("/api/v1/orders", orderRoutes);
+
+// =====================================
+// ADMIN ROUTES
+// =====================================
+
 app.use("/api/v1/admin", adminRoutes);
+
 // =====================================
 // UNKNOWN API ROUTES
 // =====================================
@@ -127,6 +127,7 @@ app.use("/api", (_req, res) => {
 
 app.use(
   (error: unknown, _req: Request, res: Response, _next: NextFunction): void => {
+    // Duplicate unique database value.
     if (
       typeof error === "object" &&
       error !== null &&
@@ -139,6 +140,7 @@ app.use(
       return;
     }
 
+    // Invalid Mongoose document data.
     if (error instanceof mongoose.Error.ValidationError) {
       res.status(400).json({
         message: "Invalid database field values",
@@ -146,6 +148,7 @@ app.use(
       return;
     }
 
+    // Invalid database identifier.
     if (error instanceof mongoose.Error.CastError) {
       res.status(400).json({
         message: "Invalid resource identifier",
@@ -153,8 +156,20 @@ app.use(
       return;
     }
 
-    console.error("API error:", error);
+    // Log an unexpected failure safely.
+    //
+    // Do not log the complete error object.
+    // It could contain database or request details.
+    logger.error(
+      {
+        event: "api.unexpected_error",
+        requestId: res.locals.requestId ?? "unknown",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      },
+      "Unexpected API failure",
+    );
 
+    // Never expose internal stack traces.
     res.status(500).json({
       message: "Internal server error",
     });

@@ -206,7 +206,7 @@ export const updateProduct = async (
       $set: req.body,
     },
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   );
@@ -251,7 +251,7 @@ export const deactivateProduct = async (
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   );

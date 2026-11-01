@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-
+import AccountBackNavigation from "@/components/AccountBackNavigation";
 import { useQueries } from "@tanstack/react-query";
 
 import { useCart, MAX_CART_QUANTITY } from "@/context/CartContext";
@@ -89,6 +89,7 @@ export default function CartPage() {
   if (items.length === 0) {
     return (
       <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+        <AccountBackNavigation />
         <h1 className="text-3xl font-bold text-gray-900">Your Shopping Cart</h1>
 
         <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">

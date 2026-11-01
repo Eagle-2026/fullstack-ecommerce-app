@@ -18,14 +18,19 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // =====================================
+  // CUSTOMER LOGIN
+  // =====================================
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (loading) return;
 
     setError("");
     setLoading(true);
 
     try {
-      // Step 1: Send login details to the backend.
+      // Step 1: Send credentials to the backend.
       const response = await apiFetch<{
         status: string;
         data: {
@@ -34,27 +39,40 @@ export default function LoginPage() {
       }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({
-          email,
+          email: email.trim().toLowerCase(),
           password,
         }),
       });
 
-      // Step 2: Clear cached data from any previous user.
+      // Step 2: Cancel old authentication queries.
+      await queryClient.cancelQueries();
+
+      // Step 3: Clear cached data from
+      // any previously logged-in customer.
       queryClient.clear();
 
-      // Step 3: Update the shared authentication state.
-      // The StoreHeader will now recognize the logged-in user.
+      // Step 4: Update the logged-in user.
       queryClient.setQueryData(["me"], response.data.user);
 
-      // Step 4: Redirect to the account page.
-      router.replace("/account");
+      // Step 5: Remove password from React state.
+      setPassword("");
+
+      // Step 6: Redirect to the Shop homepage.
+      router.replace("/");
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Login failed");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Login failed. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
   }
 
+  // =====================================
+  // LOGIN PAGE
+  // =====================================
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
       <form
@@ -73,6 +91,8 @@ export default function LoginPage() {
             type="email"
             autoComplete="email"
             required
+            maxLength={254}
+            disabled={loading}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             className="mt-1 w-full rounded-lg border p-3 text-gray-900"
@@ -89,6 +109,7 @@ export default function LoginPage() {
             type="password"
             autoComplete="current-password"
             required
+            disabled={loading}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             className="mt-1 w-full rounded-lg border p-3 text-gray-900"
