@@ -8,6 +8,13 @@ const imageUrlSchema = z
     (value) => {
       if (value === "") return true;
 
+      // Accept images stored in our public folder.
+      const isLocalImage =
+        /^\/productsImages\/[a-zA-Z0-9._-]+\.(jpg|jpeg|png|webp)$/i.test(value);
+
+      if (isLocalImage) return true;
+
+      // Also accept HTTPS image URLs.
       try {
         return new URL(value).protocol === "https:";
       } catch {
@@ -15,7 +22,7 @@ const imageUrlSchema = z
       }
     },
     {
-      message: "Image URL must use HTTPS",
+      message: "Use an HTTPS URL or a valid local product image path",
     },
   );
 
@@ -35,7 +42,7 @@ export const createProductSchema = z
 
     description: z.string().trim().min(10).max(2000),
 
-    priceCents: z.number().int().safe().min(0),
+    priceCents: z.number().int().safe().min(1),
 
     category: z.string().trim().min(2).max(60),
 

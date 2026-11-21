@@ -21,8 +21,7 @@ const CART_STORAGE_KEY = "ecommerce-cart-v1";
 export const MAX_CART_QUANTITY = 20;
 
 // Maximum different products in one cart.
-export const MAX_CART_ITEMS = 50;
-
+export const MAX_CART_ITEMS = 20;
 // Limit the size of saved browser data.
 const MAX_STORAGE_LENGTH = 50000;
 

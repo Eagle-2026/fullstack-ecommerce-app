@@ -9,7 +9,7 @@ import { getProducts } from "@/lib/products";
 
 import type { ProductSort } from "@/types/product";
 
-const PRODUCTS_PER_PAGE = 4;
+const PRODUCTS_PER_PAGE = 6;
 
 export default function HomePage() {
   // Product search

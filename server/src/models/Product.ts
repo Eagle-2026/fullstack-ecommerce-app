@@ -1,8 +1,4 @@
-import mongoose, {
-  Schema,
-  Types,
-  Document,
-} from "mongoose";
+import mongoose, { Schema, Types, Document } from "mongoose";
 
 export interface IProduct extends Document {
   _id: Types.ObjectId;
@@ -50,7 +46,7 @@ const productSchema = new Schema<IProduct>(
     priceCents: {
       type: Number,
       required: true,
-      min: 0,
+      min: 1,
       validate: {
         validator: Number.isSafeInteger,
         message: "Price must be a whole number of cents",
@@ -74,13 +70,22 @@ const productSchema = new Schema<IProduct>(
         validator: (value: string) => {
           if (value === "") return true;
 
+          // Allow local images from public/productsImages.
+          const isLocalImage =
+            /^\/productsImages\/[a-zA-Z0-9._-]+\.(jpg|jpeg|png|webp)$/i.test(
+              value,
+            );
+
+          if (isLocalImage) return true;
+
+          // Also allow secure HTTPS image URLs.
           try {
             return new URL(value).protocol === "https:";
           } catch {
             return false;
           }
         },
-        message: "Image URL must use HTTPS",
+        message: "Use an HTTPS URL or a valid local product image path",
       },
     },
 
@@ -102,7 +107,7 @@ const productSchema = new Schema<IProduct>(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Support common product filters.
@@ -111,9 +116,6 @@ productSchema.index({
   category: 1,
 });
 
-const Product = mongoose.model<IProduct>(
-  "Product",
-  productSchema
-);
+const Product = mongoose.model<IProduct>("Product", productSchema);
 
 export default Product;

@@ -1,3 +1,4 @@
+
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
@@ -12,10 +13,17 @@ type ProductImageProps = {
 export default function ProductImage({ imageUrl, name }: ProductImageProps) {
   const [failedImage, setFailedImage] = useState<string | null>(null);
 
-  // Only accept HTTPS image URLs.
-  const safeImageUrl = imageUrl?.startsWith("https://") ? imageUrl : null;
+  // Accept HTTPS URLs and local product images.
+  const isLocalProductImage =
+    /^\/productsImages\/[a-zA-Z0-9._-]+\.(jpg|jpeg|png|webp)$/i.test(imageUrl);
 
-  const showImage = safeImageUrl !== null && failedImage !== safeImageUrl;
+  const safeImageUrl =
+    imageUrl?.startsWith("https://") || isLocalProductImage
+      ? imageUrl
+      : null;
+
+  const showImage =
+    safeImageUrl !== null && failedImage !== safeImageUrl;
 
   return (
     <div className="flex aspect-4/3 w-full items-center justify-center overflow-hidden bg-gray-100">

@@ -222,20 +222,14 @@ export default function AdminProductsPage() {
               ["category", "Category"],
               ["priceDollars", "Price in USD"],
               ["stock", "Stock Quantity"],
-              ["imageUrl", "HTTPS Image URL (Optional)"],
+              ["imageUrl", "Product Image Path or HTTPS URL (Optional)"],
             ] as const
           ).map(([field, label]) => (
             <label key={field} className="block text-sm font-medium">
               {label}
 
               <input
-                type={
-                  field === "stock"
-                    ? "number"
-                    : field === "imageUrl"
-                      ? "url"
-                      : "text"
-                }
+             type={field === "stock" ? "number" : "text"}
                 min={field === "stock" ? 0 : undefined}
                 step={field === "stock" ? 1 : undefined}
                 required={field !== "imageUrl"}

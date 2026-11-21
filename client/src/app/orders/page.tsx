@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { getMyOrders } from "@/lib/orders";
-
+import { ApiRequestError } from "@/lib/api";
 import AccountBackNavigation from "@/components/AccountBackNavigation";
 
 // =====================================
@@ -23,7 +23,7 @@ function formatMoney(cents: number, currency: string): string {
 // =====================================
 
 export default function OrdersPage() {
-  const { data, isPending, isError, refetch } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ["my-orders"],
     queryFn: getMyOrders,
     staleTime: 10000,
@@ -67,7 +67,9 @@ export default function OrdersPage() {
 
           <div className="mt-8 rounded-2xl border border-red-200 bg-white p-8 shadow-sm">
             <p role="alert" className="text-red-700">
-              Unable to load your orders. Please check your login or connection.
+              {error instanceof ApiRequestError && error.status === 401
+                ? "Please log in to view your orders."
+                : "Unable to load your orders. Please check your connection and try again."}
             </p>
 
             <div className="mt-5 flex flex-wrap gap-3">
