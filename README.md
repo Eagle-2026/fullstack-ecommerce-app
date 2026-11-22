@@ -91,6 +91,7 @@ The rewrite is defined in `client/next.config.ts`. It uses `BACKEND_URL` when se
 │   │   ├── validators/
 │   │   └── scripts/
 │   └── tests/               # Automated backend tests
+├── screenshots/             # Portfolio screenshots for this README
 └── README.md
 ```
 
@@ -210,7 +211,7 @@ The latest local checks performed during project preparation passed:
 - **Backend:** TypeScript check, ESLint, and build.
 - **Frontend:** TypeScript check, ESLint, and Next.js build.
 - **Backend automated tests:** **81 passed, 0 failed**.
-- **Manual test:** A verified expired Stripe test checkout was reconciled; the order changed to _expired_ and the reserved product stock was restored.
+- **Manual test:** A verified expired Stripe test checkout was reconciled; the order changed to `expired` and the reserved product stock was restored.
 
 The automated tests cover scenarios including authentication, access control, invalid requests, checkout concurrency, payment verification, signed webhooks, and inventory state transitions. These results describe the tested local version, not an independent production security certification.
 
@@ -227,9 +228,43 @@ The automated tests cover scenarios including authentication, access control, in
 
 **Important limitation:** The project includes a read-only pending-checkout report and automated tests for missed-webhook reconciliation. A continuously running, scheduled recovery process has **not been verified**. For a production deployment, webhook delivery, retry/reconciliation scheduling, monitoring, deployment configuration, and live-payment readiness must be reviewed separately.
 
-## Screenshots
+## Application Screenshots
 
-The project includes local UI pages for the storefront, product details, cart, account/orders, and admin interface. Add screenshots to this section when the image files are ready to commit; no screenshot links are included here yet to avoid broken references.
+### Storefront Homepage
+
+Browse available products with search, category filtering, prices, and stock information.
+
+![E-commerce storefront homepage](screenshots/home.png)
+
+### Shopping Cart
+
+Review products, adjust quantities, and see the subtotal.
+
+![Shopping cart](screenshots/cart.png)
+
+### Stripe Test Checkout
+
+Stripe-hosted checkout displayed in sandbox/test mode.
+
+![Stripe test-mode checkout](screenshots/checkout.png)
+
+### Customer Account
+
+Account overview with navigation to orders and account security.
+
+![Customer account dashboard](screenshots/my-Account.png)
+
+### Order History
+
+Review previous orders and their current payment statuses.
+
+![Order history](screenshots/my-order.png)
+
+### Admin Dashboard
+
+Admin overview of products, customers, orders, and store totals.
+
+![E-commerce admin dashboard](screenshots/admin-dashboard.png)
 
 ## Portfolio context
 
