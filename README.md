@@ -2,7 +2,7 @@
 
 A full-stack e-commerce portfolio project built with **Next.js, React, TypeScript, Node.js, Express, and MongoDB**. The application includes a customer storefront, shopping cart, account-based order history, an admin area, and a **Stripe test-mode checkout** workflow. Its backend includes authentication and authorization controls, transactional inventory reservation, payment verification, and webhook handling.
 
-> **Project status:** Developed and tested locally as a portfolio project. Checkout uses Stripe **test mode**; this repository is not presented as a production-ready store or a live-payment deployment.
+> **Project status:** Deployed as a full-stack portfolio demo (Vercel frontend, Render backend, MongoDB Atlas). Checkout uses Stripe **test mode only**. This is not a production-ready store and does not accept real payments.
 
 ## Live Demo
 
@@ -49,20 +49,22 @@ A full-stack e-commerce portfolio project built with **Next.js, React, TypeScrip
 
 ## Tech stack
 
-| Layer                        | Technologies                                          |
-| ---------------------------- | ----------------------------------------------------- |
-| Frontend                     | Next.js 16, React 19, TypeScript, Tailwind CSS 4      |
-| Frontend data fetching       | TanStack React Query                                  |
-| Backend                      | Node.js, Express 5, TypeScript                        |
-| Database                     | MongoDB, Mongoose                                     |
-| Payments                     | Stripe Checkout, Stripe webhooks                      |
-| Authentication               | JSON Web Tokens, bcrypt, HTTP cookies                 |
-| Validation and HTTP security | Zod, Helmet, CORS, express-rate-limit                 |
-| Logging                      | Pino                                                  |
-| Email library                | Nodemailer                                            |
-| Tests                        | Node.js test runner, Supertest, MongoDB Memory Server |
+| Layer | Technologies |
+| --- | --- |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
+| Frontend data fetching | TanStack React Query |
+| Backend | Node.js, Express 5, TypeScript |
+| Database | MongoDB, Mongoose |
+| Payments | Stripe Checkout, Stripe webhooks |
+| Authentication | JSON Web Tokens, bcrypt, HTTP cookies |
+| Validation and HTTP security | Zod, Helmet, CORS, express-rate-limit |
+| Logging | Pino |
+| Email library | Nodemailer |
+| Tests | Node.js test runner, Supertest, MongoDB Memory Server |
 
 ## How the application connects
+
+The following diagram shows local development. The deployed frontend runs on Vercel, and the Express API runs on Render.
 
 ```text
 Browser
@@ -199,24 +201,24 @@ Set `STRIPE_WEBHOOK_SECRET` to the signing secret for the **active listener or c
 
 ### Backend (`server/`)
 
-| Command                 | Purpose                        |
-| ----------------------- | ------------------------------ |
-| `npm run dev`           | Run the API in watch mode      |
-| `npm run typecheck`     | Check backend TypeScript types |
-| `npm run lint`          | Lint backend source            |
-| `npm run build`         | Compile the backend            |
-| `npm start`             | Start the compiled backend     |
-| `npm run test:security` | Run backend automated tests    |
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Run the API in watch mode |
+| `npm run typecheck` | Check backend TypeScript types |
+| `npm run lint` | Lint backend source |
+| `npm run build` | Compile the backend |
+| `npm start` | Start the compiled backend |
+| `npm run test:security` | Run backend automated tests |
 
 ### Frontend (`client/`)
 
-| Command            | Purpose                         |
-| ------------------ | ------------------------------- |
-| `npm run dev`      | Run Next.js locally             |
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Run Next.js locally |
 | `npx tsc --noEmit` | Check frontend TypeScript types |
-| `npm run lint`     | Lint frontend source            |
-| `npm run build`    | Build Next.js for production    |
-| `npm start`        | Start the built frontend        |
+| `npm run lint` | Lint frontend source |
+| `npm run build` | Build Next.js for production |
+| `npm start` | Start the built frontend |
 
 ### Latest local checks
 
@@ -225,7 +227,8 @@ The latest local checks performed during project preparation passed:
 - **Backend:** TypeScript check, ESLint, and build.
 - **Frontend:** TypeScript check, ESLint, and Next.js build.
 - **Backend automated tests:** **81 passed, 0 failed**.
-- **Manual test:** A verified expired Stripe test checkout was reconciled; the order changed to `expired` and the reserved product stock was restored.
+- **Manual local test:** A verified expired Stripe test checkout was reconciled; the order changed to `expired` and the reserved product stock was restored.
+- **Hosted smoke test:** Customer login, product browsing, Stripe test checkout, and order history were tested. Render logs showed a successful payment-confirmation webhook (`HTTP 200`) that updated the order.
 
 The automated tests cover scenarios including authentication, access control, invalid requests, checkout concurrency, payment verification, signed webhooks, and inventory state transitions. These results describe the tested local version, not an independent production security certification.
 
@@ -240,7 +243,7 @@ The automated tests cover scenarios including authentication, access control, in
 - Inventory-state checks to help prevent double charging-related state changes, double reservation, or double release.
 - Secret values are stored in local environment files excluded from version control.
 
-**Important limitation:** The project includes a read-only pending-checkout report and automated tests for missed-webhook reconciliation. A continuously running, scheduled recovery process has **not been verified**. For a production deployment, webhook delivery, retry/reconciliation scheduling, monitoring, deployment configuration, and live-payment readiness must be reviewed separately.
+**Important limitation:** The project includes a read-only pending-checkout report and automated tests for missed-webhook reconciliation. A continuously running, scheduled recovery process has **not been verified**. For a production deployment, webhook reliability under failures, retry/reconciliation scheduling, monitoring, deployment configuration, and live-payment readiness would need further review.
 
 ## Application Screenshots
 
