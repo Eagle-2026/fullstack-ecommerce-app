@@ -4,6 +4,20 @@ A full-stack e-commerce portfolio project built with **Next.js, React, TypeScrip
 
 > **Project status:** Developed and tested locally as a portfolio project. Checkout uses Stripe **test mode**; this repository is not presented as a production-ready store or a live-payment deployment.
 
+## Live Demo
+
+**Live Application:** https://fullstack-ecommerce-app-rho.vercel.app/
+
+**Backend API Health Check:** https://fullstack-ecommerce-app-zl9b.onrender.com/api/health
+
+### Demo Information
+
+- Full-stack application deployed with Vercel and Render.
+- MongoDB Atlas cloud database.
+- Stripe Checkout runs in TEST MODE only.
+- No real payments are processed.
+- The backend uses Render's free instance, so the first request may take longer after inactivity.
+
 ## Features
 
 ### Customer experience
