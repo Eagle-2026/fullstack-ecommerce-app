@@ -19,6 +19,15 @@ import adminRoutes from "./routes/adminRoutes";
 import { stripeWebhook } from "./controllers/stripeWebhookController";
 
 const app = express();
+// =====================================
+// TRUST PROXY — RENDER DEPLOYMENT
+// =====================================
+
+// Render runs Express behind a reverse proxy.
+// Trust the nearest proxy hop in production.
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 
 // =====================================
 // REQUEST LOGGING
